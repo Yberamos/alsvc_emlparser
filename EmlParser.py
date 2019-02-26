@@ -1,12 +1,8 @@
 from assemblyline.al.service.base import ServiceBase
-from assemblyline.al.common.result import Result, ResultSection, SCORE, TAG_TYPE, constants
+from assemblyline.al.common.result import Result, ResultSection, SCORE
 import email
 from email.header import decode_header
 import re
-import sys
-import quopri
-import pprint
-import json
 
 sections = [
     {
@@ -157,7 +153,36 @@ class EmlParser(ServiceBase):
     
 
     def parse_journaling(self,journal_record_message):   
+        """
+        Input: a Journal Record Message in the email.message.Message format (see the email module and the email.message_from_* functions)
+        Output: a tuple of (journal_record_message_headers, parsed_envelope, original_message_part)
+            * journal_record_message_headers are the headers of the Journal Record Message (i.e. the enclosing message). It is a list of 2-uples and it provided by the email module.
+                - The first element of the tuple is the name of the header (e.g. From, To, Subject, Date, ...), the second is the value of the headers. 
+                - It is a list of tuples and not a dictionnary because there is no warranty that a header will appear only once in an e-mail headers.
+                - Example data:
+                    [('Subject', 'Test'), ('To', '"Test" <test@example.com>'), ('From', 'sender@example.com')]
+        #TODO: is it useful
+            * parsed_envelope are the journaling meta-data. It is a dict. 
+                - The key is the name of the field name, and the value is its value. See the Journal Record Message File Format specification.
+                - All associated values are bytes objects.
+                - Note that the value associated with recipients fields (e.g. to, cc, ...) is an array of dict. 
+                    It is an array because the journaling data may contain multiple occurence of the same recipient field (e.g. multiple to: lines).
+                    It is an array of dict because each recipient may contain not only the recipient adress but also a redirection type and a redirection adress.
+                - Valid keys for the journaling data dict are: b"sender", b"subject", b"message-id", b"on-behalf-of", b"label", b"mailbox", b"sentutc", b"receivedutc", 
+                  b"bcc", b"to", b"cc", and b"recipient"
+                - If the entry is keyed by b"to", b"cc", b"bcc", or b"recipient", the valid keys for the returned dict are b"forward_path", b"redirection_type", 
+                  and b"original_forward_path"
+                - b"forward_path" and b"original_forward_path" entries are e-mail adresses encoded as string.
+                - b"redirection_type" entries are string with a value of either b"Expanded" or b"Forwarded"
+                - Example data: 
+                    {b'recipient': [{b'original_forward_path': 'test@example.com', b'redirection_type': b'Expanded', b'forward_path': b'mailing-list@example.com'}], 
+                     b'message-id': b'<ABCDEF0123456ABCDEF0123456789ABCDEF012@ABCDEF0123456.example.com>',
+                     b'subject': b'Test test test',
+                     b'sender': b'sender@example.com'}
 
+
+            * original_message_part is the journaled, original, e-mail. It is an email.message.Message object.
+        """
         parts = journal_record_message.get_payload()
 
 
@@ -179,7 +204,7 @@ class EmlParser(ServiceBase):
             
             if field in unique_fields:
                 if field in parsed_envelope.keys():
-                    raise MalformedRecordMessageError("Duplicate field: " + str(field),resut)
+                    raise MalformedRecordMessageError("Duplicate field: " + str(field),parsed_envelope)
                 else:
                     parsed_envelope[field] = value.replace('\r','')
             else:        # Field is in recipient_fields
@@ -222,7 +247,6 @@ class EmlParser(ServiceBase):
         bad_chars = re.compile('[%s]' % '\t\n\r')
 
         for key in msg.keys():
-
             info[key]=bad_chars.sub('',msg.get(key))
 
         return info
@@ -458,12 +482,21 @@ class EmlParser(ServiceBase):
         return result
 
     def beautify_headers(self,ugly_dict):
+        """Clean known headers if found in the dict
+
+            Args:
+            ugly_dict: a dict that contains eml headers and their values
+
+            Returns:
+            A nice and clean dict
+        """
         beautified_headers={}
         for header in ugly_dict.keys():
             if(not header.startswith("X")):
+                #RFC822 headers or personalised entry in the dict
                 if header.startswith("From") or header.startswith("To") :
-                    temp=decode_header(ugly_dict[header])
-                    if temp[0][1] is not None:
+                    temp=decode_header(ugly_dict[header]) 
+                    if temp[0][1] is not None: #check if it's encoded
                         decoded=temp[0][0].decode(temp[0][1],'strict')
                     else:
                         decoded=temp[0][0]
@@ -472,7 +505,7 @@ class EmlParser(ServiceBase):
 
                 elif header.startswith("Subject") or header.startswith("Thread-Topic"):
                     temp=decode_header(ugly_dict[header])
-                    if temp[0][1] is not None:
+                    if temp[0][1] is not None: #check if it's encoded
                         decoded=temp[0][0].decode(temp[0][1],'strict')
                     else:
                         decoded=temp[0][0]
@@ -485,13 +518,13 @@ class EmlParser(ServiceBase):
                     bad_chars = re.compile('[%s]' % '<>')
                     beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
                 
-                elif header.startswith("DKIM-Signature"):
+                elif header.startswith("DKIM-Signature"): #the DKIM-signature is a dict concatenate as a string
                     beautified_headers[header]=self.beatify_dict(ugly_dict[header])
                 
-                elif header.startswith("Authentication") :
-                    auth_res=ugly_dict[header].split(';')
+                elif header.startswith("Authentication") : #same as DKIM-signature but much simpler
+                    auth_res=ugly_dict[header].split(';')  
                     for entry in auth_res:
-                        if auth_res.index(entry)==0:
+                        if auth_res.index(entry)==0:   #the first 'entry' has no key and therefore would be mixed with the key of the next entry
                             entry=entry.split(' ')
                             entry= filter(None,entry)
                             beautified_headers[header]={}
@@ -510,22 +543,22 @@ class EmlParser(ServiceBase):
                     beautified_headers[header]={}
                     beautified_headers[header][header]=content[0]
                     boundary=content[1].replace(' ','')
-                    beautified_headers[header]["boundary"]=boundary[9:].replace('\"','')
+                    beautified_headers[header]["boundary"]=boundary[9:].replace('\"','') #the baundary fieled can sometimes be boundary="----=_Part_35139" the 2nd '=' being part of the boundary
                 
                 elif header.startswith("Sender"):
                     bad_chars = re.compile('[%s]' % '<>')
                     beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
                 
-                elif header.startswith("Journaling_Informations"):
+                elif header.startswith("Journaling_Informations"): 
                     beautified_headers[header]={}
                     for key in ugly_dict[header].keys():
                         if key.startswith("Message-I"):
                             bad_chars = re.compile('[%s]' % '<>')
                             beautified_headers[header][key]=bad_chars.sub('',ugly_dict[header][key])
-                        elif key.startswith("Recipient"):
+                        elif key.startswith("Recipient"): 
                             beautified_headers[header][key]={}
                             for entry in ugly_dict[header][key][0].keys():
-                                beautified_headers[header][key][entry]=ugly_dict[header][key][0][entry].replace('\r','')
+                                beautified_headers[header][key][entry]=ugly_dict[header][key][0][entry].replace('\r','') #instead of having a list  with all the adresses in a dictionary with only one entry, move everything up into the dictionary
                         else:
                             beautified_headers[header][key]=ugly_dict[header][key]
                 elif header.startswith("PhishMe_Informations"):
@@ -533,11 +566,11 @@ class EmlParser(ServiceBase):
                 
                 else:
                     beautified_headers[header]=ugly_dict[header]
-            else:
-                if header.startswith("X-YMail"):
+            else: #all the non-rfc822 headers (client dependant)
+                if header.startswith("X-YMail"): #Yahoo mail headers
                     bad_chars = re.compile('[%s]' % '\n\r\t ')
                     beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
-                elif header.startswith("X-G"):
+                elif header.startswith("X-G"): #GMail headers
                     if "DKIM" in header:
                         beautified_headers[header]=self.beatify_dict(ugly_dict[header])
                     else:
@@ -546,7 +579,7 @@ class EmlParser(ServiceBase):
                     apparently=ugly_dict[header].split(';')
                     beautified_headers[header]=(apparently[0],apparently[1][1:])
 
-                elif header.startswith("X-MS-Exchange-Parent-Message-Id"):
+                elif header.startswith("X-MS-Exchange-Parent-Message-Id"):#Miscrosft Exchange headers
                     bad_chars = re.compile('[%s]' % '<>')
                     beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
                 else:
@@ -554,17 +587,25 @@ class EmlParser(ServiceBase):
         return beautified_headers
 
     def beatify_dict(self,cat_dict):
+        """Split a string into a dictionary
+
+            Args:
+            cat_dict: a dictionary that is in a string format
+
+            Returns:
+            the dictionary generated from the string
+        """
         beautified={}
         bad_chars = re.compile('[%s]' % '\n\r\t ')
-        signature=bad_chars.sub('',cat_dict)
+        signature=bad_chars.sub('',cat_dict) #remove all the control char while it's still a string
         signature=signature.replace("=",";").split(";")
         signature= filter(None,signature)
         for entry in signature:                       
-            if signature.index(entry)%2 ==0:
+            if signature.index(entry)%2 ==0: #the elements in the list will have the order= key value key value key value
                 beautified[entry]=""
                 key=entry
             else:
-                if key.startswith('b'):
+                if key.startswith('b'): #those entry are suposed to be in b64 but all the '=' were remover to split the keys and values (therefore, the padding is gone)
                     missing_padding = len(entry) % 4
                     if missing_padding:
                         entry += b'='* (4 - missing_padding)
