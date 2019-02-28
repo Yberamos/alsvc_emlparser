@@ -6,60 +6,60 @@ import re
 
 sections = [
     {
-        b'section_name':  b'reporter_agent',
-        b'section_start': b"-----BEGIN REPORTER AGENT-----",
-        b'section_end':   b"-----END REPORTER AGENT-----",
-        b'fields': [
-            b"Reporter agent",
-            b"IP Address",
-            b"Computer Name"
+        'section_name':  'reporter_agent',
+        'section_start': "-----BEGIN REPORTER AGENT-----",
+        'section_end':   "-----END REPORTER AGENT-----",
+        'fields': [
+            "Reporter agent",
+            "IP Address",
+            "Computer Name"
         ]
     },
     {
-        b'section_name':  b'email_headers',
-        b'section_start': b"-----BEGIN EMAIL HEADERS-----",
-        b'section_end':   b"-----END EMAIL HEADERS-----"
+        'section_name':  'email_headers',
+        'section_start': "-----BEGIN EMAIL HEADERS-----",
+        'section_end':   "-----END EMAIL HEADERS-----"
     },
     {
-        b'section_name':  b'report_count',
-        b'section_start': b"-----BEGIN REPORT COUNT-----",
-        b'section_end':   b"-----END REPORT COUNT-----",
-        b'fields': [
-            b"PhishMe emails reported",
-            b"Suspicious emails reported"
+        'section_name':  'report_count',
+        'section_start': "-----BEGIN REPORT COUNT-----",
+        'section_end':   "-----END REPORT COUNT-----",
+        'fields': [
+            "PhishMe emails reported",
+            "Suspicious emails reported"
         ]
     },
     {
-        b'section_name':  b'urls',
-        b'section_start': b"-----BEGIN URLS-----",
-        b'section_end':   b"-----END URLS-----",
-        b'fields': [
-            b"Link text",
-            b"URL",
-            b"URL Domain"
+        'section_name':  'urls',
+        'section_start': "-----BEGIN URLS-----",
+        'section_end':   "-----END URLS-----",
+        'fields': [
+            "Link text",
+            "URL",
+            "URL Domain"
         ]
     },
     {
-        b'section_name':  b'attachments',
-        b'section_start': b"-----BEGIN ATTACHMENTS-----",
-        b'section_end':   b"-----END ATTACHMENTS-----",
-        b'fields': [
-            b"File Name",
-            b"File Size",
-            b"MD5 File Checksum",
-            b"SHA1 File Checksum",
-            b"SHA256 File Checksum"
+        'section_name':  'attachments',
+        'section_start': "-----BEGIN ATTACHMENTS-----",
+        'section_end':   "-----END ATTACHMENTS-----",
+        'fields': [
+            "File Name",
+            "File Size",
+            "MD5 File Checksum",
+            "SHA1 File Checksum",
+            "SHA256 File Checksum"
         ]
     }        
 ]
 
-mandatory_unique_fields = [b"Sender", b"Subject", b"Message-Id"]
-unique_fields = mandatory_unique_fields + [b"On-Behalf-Of", b"Label", b"Mailbox", b"SentUtc", b"ReceivedUtc"]
-recipient_fields = [b"Bcc", b"To", b"Cc", b"Recipient"]
+mandatory_unique_fields = ["Sender", "Subject", "Message-Id"]
+unique_fields = mandatory_unique_fields + ["On-Behalf-Of", "Label", "Mailbox", "SentUtc", "ReceivedUtc"]
+recipient_fields = ["Bcc", "To", "Cc", "Recipient"]
 valid_fields = unique_fields + recipient_fields
 
-redirection_types = [b"Expanded", b"Forwarded"]
-sender_fields = [b"Sender", b"On-Behalf-Of"]
+redirection_types = ["Expanded", "Forwarded"]
+sender_fields = ["Sender", "On-Behalf-Of"]
 
 
 class JournalRecordMessageError(Exception):
@@ -83,7 +83,7 @@ class MalformedPhishMeMailError(PhishMeMailError):
 
 
 class EmlParser(ServiceBase):
-    SERVICE_CATEGORY = 'Extraction'
+    SERVICE_CATEGORY = 'Metadata'
     SERVICE_ACCEPTS = 'document/email'
     SERVICE_REVISION = ServiceBase.parse_revision('$Id$')
     SERVICE_VERSION = '1'
@@ -144,7 +144,10 @@ class EmlParser(ServiceBase):
             except Exception:
                 pass
         
-        found=self.beautify_headers(found)
+        try:
+            found=self.beautify_headers(found)
+        except Exception as e:
+            self.log.error(e)
         section = ResultSection(score=SCORE.NULL,title_text= "Extracted informations",body_format='JSON',body=found)
         result.add_section(section)
         request.result = result
@@ -168,17 +171,17 @@ class EmlParser(ServiceBase):
                 - Note that the value associated with recipients fields (e.g. to, cc, ...) is an array of dict. 
                     It is an array because the journaling data may contain multiple occurence of the same recipient field (e.g. multiple to: lines).
                     It is an array of dict because each recipient may contain not only the recipient adress but also a redirection type and a redirection adress.
-                - Valid keys for the journaling data dict are: b"sender", b"subject", b"message-id", b"on-behalf-of", b"label", b"mailbox", b"sentutc", b"receivedutc", 
-                  b"bcc", b"to", b"cc", and b"recipient"
-                - If the entry is keyed by b"to", b"cc", b"bcc", or b"recipient", the valid keys for the returned dict are b"forward_path", b"redirection_type", 
-                  and b"original_forward_path"
-                - b"forward_path" and b"original_forward_path" entries are e-mail adresses encoded as string.
-                - b"redirection_type" entries are string with a value of either b"Expanded" or b"Forwarded"
+                - Valid keys for the journaling data dict are: "sender", "subject", "message-id", "on-behalf-of", "label", "mailbox", "sentutc", "receivedutc", 
+                  "bcc", "to", "cc", and "recipient"
+                - If the entry is keyed by "to", "cc", "bcc", or "recipient", the valid keys for the returned dict are "forward_path", "redirection_type", 
+                  and "original_forward_path"
+                - "forward_path" and "original_forward_path" entries are e-mail adresses encoded as string.
+                - "redirection_type" entries are string with a value of either "Expanded" or "Forwarded"
                 - Example data: 
-                    {b'recipient': [{b'original_forward_path': 'test@example.com', b'redirection_type': b'Expanded', b'forward_path': b'mailing-list@example.com'}], 
-                     b'message-id': b'<ABCDEF0123456ABCDEF0123456789ABCDEF012@ABCDEF0123456.example.com>',
-                     b'subject': b'Test test test',
-                     b'sender': b'sender@example.com'}
+                    {'recipient': [{'original_forward_path': 'test@example.com', 'redirection_type': 'Expanded', 'forward_path': 'mailing-list@example.com'}], 
+                     'message-id': '<ABCDEF0123456ABCDEF0123456789ABCDEF012@ABCDEF0123456.example.com>',
+                     'subject': 'Test test test',
+                     'sender': 'sender@example.com'}
 
 
             * original_message_part is the journaled, original, e-mail. It is an email.message.Message object.
@@ -192,12 +195,12 @@ class EmlParser(ServiceBase):
         envelope = envelope_part.get_payload(decode=True)
         parsed_envelope = {}
 
-        for line in envelope.split(b'\n'):
+        for line in envelope.split('\n'):
             # Skip emtpy lines
-            if line.strip() == b'':
+            if line.strip() == '':
                 continue
 
-            field, value = line.split(b': ', 1)
+            field, value = line.split(': ', 1)
 
             if field not in valid_fields:
                 raise NotAJournalRecordMessageError("Probable not a Jounraling eml")
@@ -208,9 +211,9 @@ class EmlParser(ServiceBase):
                 else:
                     parsed_envelope[field] = value.replace('\r','')
             else:        # Field is in recipient_fields
-                if b',' in value: # Recipient contains a redirection
-                    forward_path, redirection = value.split(b', ', 1)
-                    redirection_type, original_forward_path = redirection.split(b": ", 1)
+                if ',' in value: # Recipient contains a redirection
+                    forward_path, redirection = value.split(', ', 1)
+                    redirection_type, original_forward_path = redirection.split(": ", 1)
                     if redirection_type not in redirection_types:
                         raise MalformedRecordMessageError("Unkown redirection type: " + str(redirection_type))
                 else:
@@ -218,10 +221,10 @@ class EmlParser(ServiceBase):
                     redirection_type = None
                     original_forward_path = None
 
-                entry = {b'forward_path': forward_path}
+                entry = {'forward_path': forward_path}
                 if redirection_type is not None and original_forward_path is not None:
-                    entry[b'redirection_type'] = redirection_type
-                    entry[b'original_forward_path'] = original_forward_path
+                    entry['redirection_type'] = redirection_type
+                    entry['original_forward_path'] = original_forward_path
 
                 if field in parsed_envelope.keys():
                     parsed_envelope[field].append(entry)
@@ -254,64 +257,64 @@ class EmlParser(ServiceBase):
     def parse_phishme(self,phishme_mail):
         """
         Input: a PhishMe Message in the email.message.Message format (see the email module and the email.message_from_* functions)
-        Output: a dictionnary with the following keys: b'reporter_agent', b'email_headers', b'report_count', b'reported_from_folder', b'urls', b'attachments', and b'reported_message'
+        Output: a dictionnary with the following keys: 'reporter_agent', 'email_headers', 'report_count', 'reported_from_folder', 'urls', 'attachments', and 'reported_message'
 
         * The reported_from_folder key points to a byte object with information from which folder the e-mail was reported.
             - Example data: 
-                {b'Inbox'}
+                {'Inbox'}
 
         * The reporter_agent key points to a dictionnary with information regarding the the reporter agent.
-            - Valid keys are b'ip_address', b'reporter_agent', and b'computer_name'
+            - Valid keys are 'ip_address', 'reporter_agent', and 'computer_name'
             - All associated values are bytes objects.
             - Example data:
-                {b'ip_address': b'127.1.2.3',
-                 b'computer_name': b'COMPUTERNAME.intranet', 
-                 b'reporter_agent': b'Outlook|3.0.1.0|Microsoft Windows NT 10.0.16099.0 (x64)|Outlook 16.0.0.1217'
+                {'ip_address': '127.1.2.3',
+                 'computer_name': 'COMPUTERNAME.intranet', 
+                 'reporter_agent': 'Outlook|3.0.1.0|Microsoft Windows NT 10.0.16099.0 (x64)|Outlook 16.0.0.1217'
                 }
 
         * The email_headers key points to a is a dictionnary with the headers of the original e-mail.
-            - Valid keys ate b'email_headers'
+            - Valid keys ate 'email_headers'
             - All associated values are bytes objects.
             - Example data:
-                {b'email_headers': b'From: Sender <sender@example.com>\nTo: <receiver@example.com>\nSubject: Test\n'}
+                {'email_headers': 'From: Sender <sender@example.com>\nTo: <receiver@example.com>\nSubject: Test\n'}
          
         * The report_count key points to a dictionnary with information regarding the reporter.
-            - Valid keys are b'suspicious_emails_reported' and b'phishme_emails_reported'
+            - Valid keys are 'suspicious_emails_reported' and 'phishme_emails_reported'
             - All associated values are bytes objects.
             - Example data:
-                {b'phishme_emails_reported': b'0',
-                 b'suspicious_emails_reported': b'8'
+                {'phishme_emails_reported': '0',
+                 'suspicious_emails_reported': '8'
                 }
 
         * The urls key points to an array of dictionnaries about the URLs encountered in the original e-mail.
-            - Valid keys are b'link_text', b'url' and b'url_domain'. Note that b'link_text' is optional.
+            - Valid keys are 'link_text', 'url' and 'url_domain'. Note that 'link_text' is optional.
             - All associated values are bytes objects.
             - Be aware that the URL and URL domain detection is far from perfect and sometimes reports as a domain what is in reality a part of a text sentence.
             - Example data:
-            [{b'url': b'https://example[.]com/example/example.php', 
-              b'link_text': b'Click here !', 
-              b'url_domain': b'example[.]com'
+            [{'url': 'https://example[.]com/example/example.php', 
+              'link_text': 'Click here !', 
+              'url_domain': 'example[.]com'
              },
-             {b'url': b'mailto:newsletter@example[.]com',
-              b'url_domain': b'example[.]com'
+             {'url': 'mailto:newsletter@example[.]com',
+              'url_domain': 'example[.]com'
              }
             ]
             
         * The attachments key points to an array of dictionnaries about the attachments found in the original e-mail. 
-            - Valid keys are b'file_name', b'file_size', b'md5_file_checksum', b'sha1_file_checksum', and b'sha256_filechecksum'
+            - Valid keys are 'file_name', 'file_size', 'md5_file_checksum', 'sha1_file_checksum', and 'sha256_filechecksum'
             - All associated values are bytes objects.
             - Example data:                
-            [{b'sha256_file_checksum': b'0123456789012345678901234567890123456789012345678901234567890123',                                    
-              b'sha1_file_checksum': b'0123456789012345678901234567890123456789',
-              b'file_size': b'1234567', 
-              b'file_name': b'Title & Contents.pdf',                                 
-              b'md5_file_checksum': b'01234567890123456789012345678901'
+            [{'sha256_file_checksum': '0123456789012345678901234567890123456789012345678901234567890123',                                    
+              'sha1_file_checksum': '0123456789012345678901234567890123456789',
+              'file_size': '1234567', 
+              'file_name': 'Title & Contents.pdf',                                 
+              'md5_file_checksum': '01234567890123456789012345678901'
              },
-             {b'sha256_file_checksum': b'7890123456789012345678901234567890123456789012345678901234567890',
-              b'sha1_file_checksum': b'7890123456789012345678901234567890123456',
-              b'file_size': b'8901234',
-              b'file_name': b"Another file.docx",
-              b'md5_file_checksum': b'78901234567890123456789012345678'
+             {'sha256_file_checksum': '7890123456789012345678901234567890123456789012345678901234567890',
+              'sha1_file_checksum': '7890123456789012345678901234567890123456',
+              'file_size': '8901234',
+              'file_name': "Another file.docx",
+              'md5_file_checksum': '78901234567890123456789012345678'
               }
             ]
 
@@ -331,153 +334,153 @@ class EmlParser(ServiceBase):
 
         
         result ={
-            b'reporter_agent': {},
-            b'email_headers': [],
-            b'report_count': {},
-            b'reported_from_folder': None,
-            b'urls': [],
-            b'attachments': [],
-            #b'reported_message': reported_message_part
+            'reporter_agent': {},
+            'email_headers': [],
+            'report_count': {},
+            'reported_from_folder': None,
+            'urls': [],
+            'attachments': [],
+            #'reported_message': reported_message_part
         }
 
-        lines_iterator = iter(phishing_report_text.split(b'\n'))
+        lines_iterator = iter(phishing_report_text.split('\n'))
         for line in lines_iterator:
             line = line.strip()
             # Skip emtpy lines
-            if line.strip() == b"":
+            if line.strip() == "":
                 continue
 
             # Manage this information which is out of any other section
-            if line.startswith(b"Reported from folder:"):
-                result[b'reported_from_folder'] = line.split(b':', 1)[1][1:].replace('\r','')
+            if line.startswith("Reported from folder:"):
+                result['reported_from_folder'] = line.split(':', 1)[1][1:].replace('\r','')
                 continue
 
             # The current line should be a section header. Find which one.
-            section_list = (list(filter(lambda section: section[b'section_start'] == line, sections)))
+            section_list = (list(filter(lambda section: section['section_start'] == line, sections)))
             
             # There should be exactly one section matching
             if len(section_list) != 1:
                 raise NotAPhishMeMailError("Section list error, probably not a PhishMe. Section list: "+str(section_list))
             section = section_list[0]
 
-            section_name = section[b'section_name']
+            section_name = section['section_name']
 
-            if section_name == b'reporter_agent':
+            if section_name == 'reporter_agent':
                 for reporter_agent_line in lines_iterator:
                     reporter_agent_line = reporter_agent_line.strip()
-                    if reporter_agent_line == section[b'section_end']:
+                    if reporter_agent_line == section['section_end']:
                         break
-                    elif reporter_agent_line == b"":
+                    elif reporter_agent_line == "":
                         continue
                     else:
-                        field, value = reporter_agent_line.split(b': ', 1)
-                        normalized_field = field.lower().replace(b' ', b'_').replace('\r','')
-                        if field not in section[b'fields']:
+                        field, value = reporter_agent_line.split(': ', 1)
+                        normalized_field = field.lower().replace(' ', '_').replace('\r','')
+                        if field not in section['fields']:
                             raise MalformedPhishMeMailError("In 'Reporter Agent' section, unknown field: " + str(field),result)
-                        elif normalized_field in result[b'reporter_agent'].keys():
+                        elif normalized_field in result['reporter_agent'].keys():
                             raise MalformedPhishMeMailError("In 'Reporter Agent' section, duplicate field: " + str(field),result)
                         else:
-                            result[b'reporter_agent'][normalized_field] = value
+                            result['reporter_agent'][normalized_field] = value
 
-            elif section_name == b'email_headers':
+            elif section_name == 'email_headers':
                 for email_headers_line in lines_iterator:
                     email_headers_line=email_headers_line.replace('\r','')
-                    if email_headers_line.strip() == section[b'section_end']:
+                    if email_headers_line.strip() == section['section_end']:
                         break
                     else:
                         # If an header line starts with a space or tab, it is the continuation of a previous line
-                        if email_headers_line.startswith(b' ') or email_headers_line.startswith(b'\t'):
-                            result[b'email_headers'][-1] = result[b'email_headers'][-1] + email_headers_line
+                        if email_headers_line.startswith(' ') or email_headers_line.startswith('\t'):
+                            result['email_headers'][-1] = result['email_headers'][-1] + email_headers_line
                         else:
-                            result[b'email_headers'].append(email_headers_line)
+                            result['email_headers'].append(email_headers_line)
 
-            elif section_name == b'report_count':
+            elif section_name == 'report_count':
                 for report_count_line in lines_iterator:
                     report_count_line = report_count_line.strip()
-                    if report_count_line == section[b'section_end']:
+                    if report_count_line == section['section_end']:
                         break
-                    elif report_count_line == b"":
+                    elif report_count_line == "":
                         continue
                     else:
-                        field, value = report_count_line.split(b': ', 1)
-                        normalized_field = field.lower().replace(b' ', b'_')
-                        if field not in section[b'fields']:
+                        field, value = report_count_line.split(': ', 1)
+                        normalized_field = field.lower().replace(' ', '_')
+                        if field not in section['fields']:
                             raise MalformedPhishMeMailError("In 'Report Count' section, unknown field: " + str(field),result)
-                        elif normalized_field in result[b'report_count'].keys():
+                        elif normalized_field in result['report_count'].keys():
                             raise MalformedPhishMeMailError("In 'Report Count' section, duplicate field: " + str(field),result)
                         else:
-                            result[b'report_count'][normalized_field] = value.replace('\r','')
+                            result['report_count'][normalized_field] = value.replace('\r','')
 
-            elif section_name == b'urls':
+            elif section_name == 'urls':
                 for urls_line in lines_iterator:
                     urls_line = urls_line.strip()
-                    if urls_line == section[b'section_end']:
+                    if urls_line == section['section_end']:
                         break
-                    elif urls_line == b"":
+                    elif urls_line == "":
                         continue
                     else:
-                        field, value = urls_line.split(b':', 1)
+                        field, value = urls_line.split(':', 1)
                         value = value[1:]
-                        if field not in section[b'fields']:
+                        if field not in section['fields']:
                             raise MalformedPhishMeMailError("In 'URLS' section, unknown field: " + str(field),result)
                         else:
                             url = {}
-                            if field == b"Link text":
-                                url[b'link_text'] = value.replace('\r','')
+                            if field == "Link text":
+                                url['link_text'] = value.replace('\r','')
                                 urls_line = next(lines_iterator)
                                 urls_line = urls_line.strip()
 
                                 #skip blanks
-                                while urls_line == b'':
+                                while urls_line == '':
                                     urls_line = next(lines_iterator)
                                     urls_line = urls_line.strip()
 
-                                field, value = urls_line.split(b':', 1)
+                                field, value = urls_line.split(':', 1)
                                 value = value[1:]
 
-                            if field != b"URL":
+                            if field != "URL":
                                 raise MalformedPhishMeMailError("In 'URLS' section, expected an 'URL' field but instead got: " + str(field),result)
                             else:
                                 # PhishMe URL are non-clickable because each dot is replace by [.]. Undo this 'obfuscation'
-                                url[b'url'] = value.replace(b"[.]",b".").replace('\r','')
+                                url['url'] = value.replace("[.]",".").replace('\r','')
                                 urls_line = next(lines_iterator)
                                 urls_line = urls_line.strip()
 
                                 #skip blanks
-                                while urls_line == b'':
+                                while urls_line == '':
                                     urls_line = next(lines_iterator)
                                     urls_line = urls_line.strip()
 
-                                field, value = urls_line.split(b':', 1)
+                                field, value = urls_line.split(':', 1)
                                 value = value[1:]
                                 
-                            if field != b"URL Domain":
+                            if field != "URL Domain":
                                 raise MalformedPhishMeMailError("In 'URLS' section, expected an 'URL Domain' field but instead got: " + str(field),result)
                             else:
                                 # PhishMe URL are non-clickable because each dot is replace by [.]. Undo this 'obfuscation'
-                                url[b'url_domain'] = value.replace(b"[.]",b".").replace('\r','')
-                            result[b'urls'].append(url)
+                                url['url_domain'] = value.replace("[.]",".").replace('\r','')
+                            result['urls'].append(url)
             
-            elif section_name == b'attachments':
+            elif section_name == 'attachments':
                 for attachments_line in lines_iterator:
                     attachments_line = attachments_line.strip()
-                    if attachments_line == section[b'section_end']:
+                    if attachments_line == section['section_end']:
                         break
-                    elif attachments_line == b"":
+                    elif attachments_line == "":
                         continue
                     else:               
                         attachment = {}                 
-                        for expected_field in section[b'fields']:
-                            field, value = attachments_line.split(b': ', 1)
-                            normalized_field = field.lower().replace(b' ', b'_')
+                        for expected_field in section['fields']:
+                            field, value = attachments_line.split(': ', 1)
+                            normalized_field = field.lower().replace(' ', '_')
                             if field != expected_field: 
                                 raise MalformedPhishMeMailError("In 'Attachments' section, expected a '" + str(expected_field) +"' field but instead got: " + str(field),result)  
                             attachment[normalized_field] = value.replace('\r','')
                             # Is this the last field ?
-                            if field != section[b'fields'][-1]:
+                            if field != section['fields'][-1]:
                                 attachments_line = next(lines_iterator)
                                 attachments_line = attachments_line.strip()
-                        result[b'attachments'].append(attachment)
+                        result['attachments'].append(attachment)
 
         return result
 
@@ -495,93 +498,150 @@ class EmlParser(ServiceBase):
             if(not header.startswith("X")):
                 #RFC822 headers or personalised entry in the dict
                 if header.startswith("From") or header.startswith("To") :
-                    temp=decode_header(ugly_dict[header]) 
-                    if temp[0][1] is not None: #check if it's encoded
-                        decoded=temp[0][0].decode(temp[0][1],'strict')
-                    else:
-                        decoded=temp[0][0]
-                    bad_chars = re.compile('[%s]' % '<>')
-                    beautified_headers[header]=bad_chars.sub('',decoded)
+                    try:
+                        temp=decode_header(ugly_dict[header]) 
+                        if temp[0][1] is not None: #check if it's encoded
+                            decoded=temp[0][0].decode(temp[0][1],'strict')
+                        else:
+                            decoded=temp[0][0]
+                        bad_chars = re.compile('[%s]' % '<>')
+                        beautified_headers[header]=bad_chars.sub('',decoded)
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
+
 
                 elif header.startswith("Subject") or header.startswith("Thread-Topic"):
-                    temp=decode_header(ugly_dict[header])
-                    if temp[0][1] is not None: #check if it's encoded
-                        decoded=temp[0][0].decode(temp[0][1],'strict')
-                    else:
-                        decoded=temp[0][0]
-                    beautified_headers[header] = decoded
+                    
+                    try:
+                        temp=decode_header(ugly_dict[header])
+                        if temp[0][1] is not None: #check if it's encoded
+                            decoded=temp[0][0].decode(temp[0][1],'strict')
+                        else:
+                            decoded=temp[0][0]
+                        beautified_headers[header] = decoded
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("Message-ID") or\
                      header.startswith("Return-Path") or\
                      header.startswith("In-Reply-To") or\
                      header.startswith("References"):
-                    bad_chars = re.compile('[%s]' % '<>')
-                    beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
+                    try:
+                        bad_chars = re.compile('[%s]' % '<>')
+                        beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
                 
                 elif header.startswith("DKIM-Signature"): #the DKIM-signature is a dict concatenate as a string
-                    beautified_headers[header]=self.beatify_dict(ugly_dict[header])
+                    try:
+                        beautified_headers[header]=self.beatify_dict(ugly_dict[header])
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
                 
                 elif header.startswith("Authentication") : #same as DKIM-signature but much simpler
-                    auth_res=ugly_dict[header].split(';')  
-                    for entry in auth_res:
-                        if auth_res.index(entry)==0:   #the first 'entry' has no key and therefore would be mixed with the key of the next entry
-                            entry=entry.split(' ')
-                            entry= filter(None,entry)
-                            beautified_headers[header]={}
-                            beautified_headers[header][header]=entry[0]
-                            new_entry=entry[1].split('=')
-                            beautified_headers[header][new_entry[0]]=new_entry[1]
-                        elif auth_res.index(entry)%2 == 1:
-                            entry=entry.replace(' ','')
-                            beautified_headers[header][entry]=""
-                            key=entry
-                        else:
-                            beautified_headers[header][key]=entry
+                    try:
+                        auth_res=ugly_dict[header].split(';')  
+                        for entry in auth_res:
+                            if auth_res.index(entry)==0:   #the first 'entry' has no key and therefore would be mixed with the key of the next entry
+                                entry=entry.split(' ')
+                                entry= filter(None,entry)
+                                beautified_headers[header]={}
+                                beautified_headers[header][header]=entry[0]
+                                new_entry=entry[1].split('=')
+                                beautified_headers[header][new_entry[0]]=new_entry[1]
+                            elif auth_res.index(entry)%2 == 1:
+                                entry=entry.replace(' ','')
+                                beautified_headers[header][entry]=""
+                                key=entry
+                            else:
+                                beautified_headers[header][key]=entry
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
                 
                 elif header.startswith("Content-Type"):
-                    content=ugly_dict[header].split(';')
-                    beautified_headers[header]={}
-                    beautified_headers[header][header]=content[0]
-                    boundary=content[1].replace(' ','')
-                    beautified_headers[header]["boundary"]=boundary[9:].replace('\"','') #the baundary fieled can sometimes be boundary="----=_Part_35139" the 2nd '=' being part of the boundary
-                
+                    try:
+                        content=ugly_dict[header].split(';')
+                        beautified_headers[header]={}
+                        beautified_headers[header][header]=content[0]
+                        boundary=content[1].replace(' ','')
+                        beautified_headers[header]["boundary"]=boundary[9:].replace('\"','') #the baundary fieled can sometimes be boundary="----=_Part_35139" the 2nd '=' being part of the boundary
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
+
                 elif header.startswith("Sender"):
-                    bad_chars = re.compile('[%s]' % '<>')
-                    beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
-                
+                    try:
+                        bad_chars = re.compile('[%s]' % '<>')
+                        beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
+
                 elif header.startswith("Journaling_Informations"): 
-                    beautified_headers[header]={}
-                    for key in ugly_dict[header].keys():
-                        if key.startswith("Message-I"):
-                            bad_chars = re.compile('[%s]' % '<>')
-                            beautified_headers[header][key]=bad_chars.sub('',ugly_dict[header][key])
-                        elif key.startswith("Recipient"): 
-                            beautified_headers[header][key]={}
-                            for entry in ugly_dict[header][key][0].keys():
-                                beautified_headers[header][key][entry]=ugly_dict[header][key][0][entry].replace('\r','') #instead of having a list  with all the adresses in a dictionary with only one entry, move everything up into the dictionary
-                        else:
-                            beautified_headers[header][key]=ugly_dict[header][key]
+                    try:
+                        beautified_headers[header]={}
+                        for key in ugly_dict[header].keys():
+                            if key.startswith("Message-I"):
+                                bad_chars = re.compile('[%s]' % '<>')
+                                beautified_headers[header][key]=bad_chars.sub('',ugly_dict[header][key])
+                            elif key.startswith("Recipient"): 
+                                beautified_headers[header][key]={}
+                                for entry in ugly_dict[header][key][0].keys():
+                                    beautified_headers[header][key][entry]=ugly_dict[header][key][0][entry].replace('\r','') #instead of having a list  with all the adresses in a dictionary with only one entry, move everything up into the dictionary
+                            else:
+                                beautified_headers[header][key]=ugly_dict[header][key]
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
+
                 elif header.startswith("PhishMe_Informations"):
-                    beautified_headers[header]=self.beautify_headers(ugly_dict[header])
+                    try:
+                        beautified_headers[header]=self.beautify_headers(ugly_dict[header])
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
                 
                 else:
                     beautified_headers[header]=ugly_dict[header]
             else: #all the non-rfc822 headers (client dependant)
                 if header.startswith("X-YMail"): #Yahoo mail headers
-                    bad_chars = re.compile('[%s]' % '\n\r\t ')
-                    beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
-                elif header.startswith("X-G"): #GMail headers
-                    if "DKIM" in header:
-                        beautified_headers[header]=self.beatify_dict(ugly_dict[header])
-                    else:
+                    try:
+                        bad_chars = re.compile('[%s]' % '\n\r\t ')
+                        beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
+                    except Exception as e:
+                        self.log.error(e)
                         beautified_headers[header]=ugly_dict[header]
+
+                elif header.startswith("X-G"): #GMail headers
+                    try:
+                        if "DKIM" in header:
+                            beautified_headers[header]=self.beatify_dict(ugly_dict[header])
+                        else:
+                            beautified_headers[header]=ugly_dict[header]
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
+
                 elif header.startswith("X-Apparently-To"):
-                    apparently=ugly_dict[header].split(';')
-                    beautified_headers[header]=(apparently[0],apparently[1][1:])
+                    try:
+                        apparently=ugly_dict[header].split(';')
+                        beautified_headers[header]=(apparently[0],apparently[1][1:])
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("X-MS-Exchange-Parent-Message-Id"):#Miscrosft Exchange headers
-                    bad_chars = re.compile('[%s]' % '<>')
-                    beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
+                    try:
+                        bad_chars = re.compile('[%s]' % '<>')
+                        beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header]=ugly_dict[header]
                 else:
                     beautified_headers[header]=ugly_dict[header]
         return beautified_headers
@@ -608,7 +668,7 @@ class EmlParser(ServiceBase):
                 if key.startswith('b'): #those entry are suposed to be in b64 but all the '=' were remover to split the keys and values (therefore, the padding is gone)
                     missing_padding = len(entry) % 4
                     if missing_padding:
-                        entry += b'='* (4 - missing_padding)
+                        entry += '='* (4 - missing_padding)
                 beautified[key]=entry
         return beautified
                         
