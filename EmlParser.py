@@ -3,6 +3,7 @@ from assemblyline.al.common.result import Result, ResultSection, SCORE
 import email
 from email.header import decode_header
 import re
+import traceback
 
 sections = [
     {
@@ -122,15 +123,18 @@ class EmlParser(ServiceBase):
             message = email.message_from_file(fh)
 
         found = self.extract_info(message)
+        found['Eml_type']="Default"
 
         if self.parsing_phishme:
             try:
                 found['PhishMe_Informations']=self.parse_phishme(message)
                 eml_parsed=True
+                found['Eml_type']="PhishMe"
             except MalformedPhishMeMailError as e:
-                self.log.error(e[0])
+                self.log.error(e.args[0])
                 found['PhishMe_Informations']=e[1]
                 found['PhishMe_Informations']['Malformed']=True
+                found['Eml_type']="PhishMe"
                 eml_parsed=True
             except Exception:
                 pass
@@ -139,15 +143,16 @@ class EmlParser(ServiceBase):
             try:
                 found['Journaling_Informations']=self.parse_journaling(message)
                 eml_parsed=True
+                found['Eml_type']="Journaling"
             except MalformedRecordMessageError as e:
-                self.log.error(e)
+                self.log.exception(e)
             except Exception:
                 pass
         
         try:
             found=self.beautify_headers(found)
         except Exception as e:
-            self.log.error(e)
+            self.log.exception(e)
         section = ResultSection(score=SCORE.NULL,title_text= "Extracted informations",body_format='JSON',body=found)
         result.add_section(section)
         request.result = result
@@ -507,7 +512,7 @@ class EmlParser(ServiceBase):
                         bad_chars = re.compile('[%s]' % '<>')
                         beautified_headers[header]=bad_chars.sub('',decoded)
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
 
 
@@ -521,7 +526,7 @@ class EmlParser(ServiceBase):
                             decoded=temp[0][0]
                         beautified_headers[header] = decoded
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("Message-ID") or\
@@ -532,35 +537,27 @@ class EmlParser(ServiceBase):
                         bad_chars = re.compile('[%s]' % '<>')
                         beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
                 
                 elif header.startswith("DKIM-Signature"): #the DKIM-signature is a dict concatenate as a string
                     try:
                         beautified_headers[header]=self.beatify_dict(ugly_dict[header])
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
                 
                 elif header.startswith("Authentication") : #same as DKIM-signature but much simpler
                     try:
-                        auth_res=ugly_dict[header].split(';')  
+                        auth_res=ugly_dict[header].split(';') 
+                        beautified_headers[header]=[] 
                         for entry in auth_res:
-                            if auth_res.index(entry)==0:   #the first 'entry' has no key and therefore would be mixed with the key of the next entry
-                                entry=entry.split(' ')
-                                entry= filter(None,entry)
-                                beautified_headers[header]={}
-                                beautified_headers[header][header]=entry[0]
-                                new_entry=entry[1].split('=')
-                                beautified_headers[header][new_entry[0]]=new_entry[1]
-                            elif auth_res.index(entry)%2 == 1:
-                                entry=entry.replace(' ','')
-                                beautified_headers[header][entry]=""
-                                key=entry
-                            else:
-                                beautified_headers[header][key]=entry
+                            start=re.search(r'[a-z]',entry).start()
+                            beautified_headers[header].append(entry[start:])
+                            
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
+                        print request.path
                         beautified_headers[header]=ugly_dict[header]
                 
                 elif header.startswith("Content-Type"):
@@ -568,10 +565,11 @@ class EmlParser(ServiceBase):
                         content=ugly_dict[header].split(';')
                         beautified_headers[header]={}
                         beautified_headers[header][header]=content[0]
-                        boundary=content[1].replace(' ','')
-                        beautified_headers[header]["boundary"]=boundary[9:].replace('\"','') #the baundary fieled can sometimes be boundary="----=_Part_35139" the 2nd '=' being part of the boundary
+                        if len(content)>1:
+                            boundary=content[1].replace(' ','')
+                            beautified_headers[header]["boundary"]=boundary[9:].replace('\"','') #the baundary fieled can sometimes be boundary="----=_Part_35139" the 2nd '=' being part of the boundary
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("Sender"):
@@ -579,7 +577,7 @@ class EmlParser(ServiceBase):
                         bad_chars = re.compile('[%s]' % '<>')
                         beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("Journaling_Informations"): 
@@ -596,16 +594,39 @@ class EmlParser(ServiceBase):
                             else:
                                 beautified_headers[header][key]=ugly_dict[header][key]
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("PhishMe_Informations"):
                     try:
                         beautified_headers[header]=self.beautify_headers(ugly_dict[header])
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
                 
+                elif header.startswith("ARC"):
+                    if header.startswith("ARC-Message-Signature")\
+                    or header.startswith("ARC-Seal"):
+                        try:
+                            beautified_headers[header]=self.beatify_dict(ugly_dict[header])
+                        except Exception as e:
+                            self.log.exception(e)
+                            beautified_headers[header]=ugly_dict[header]
+
+                    elif header.startswith("ARC-Authentication-Results"):
+                        try:
+                            auth_res=ugly_dict[header].split(';') 
+                            beautified_headers[header]=[] 
+                            for entry in auth_res:
+                                start=re.search(r'[a-z]',entry).start()
+                                beautified_headers[header].append(entry[start:])
+                                
+                        except Exception as e:
+                            self.log.exception(e)
+                            print request.path
+                            beautified_headers[header]=ugly_dict[header]
+                    else:
+                        beautified_headers[header]=ugly_dict[header]
                 else:
                     beautified_headers[header]=ugly_dict[header]
             else: #all the non-rfc822 headers (client dependant)
@@ -614,7 +635,7 @@ class EmlParser(ServiceBase):
                         bad_chars = re.compile('[%s]' % '\n\r\t ')
                         beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("X-G"): #GMail headers
@@ -624,7 +645,7 @@ class EmlParser(ServiceBase):
                         else:
                             beautified_headers[header]=ugly_dict[header]
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("X-Apparently-To"):
@@ -632,7 +653,7 @@ class EmlParser(ServiceBase):
                         apparently=ugly_dict[header].split(';')
                         beautified_headers[header]=(apparently[0],apparently[1][1:])
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("X-MS-Exchange-Parent-Message-Id"):#Miscrosft Exchange headers
@@ -640,7 +661,7 @@ class EmlParser(ServiceBase):
                         bad_chars = re.compile('[%s]' % '<>')
                         beautified_headers[header]=bad_chars.sub('',ugly_dict[header])
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header]=ugly_dict[header]
                 else:
                     beautified_headers[header]=ugly_dict[header]
