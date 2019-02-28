@@ -89,7 +89,7 @@ class EmlParser(ServiceBase):
     SERVICE_REVISION = ServiceBase.parse_revision('$Id$')
     SERVICE_VERSION = '1'
     SERVICE_ENABLED = True
-    SERVICE_STAGE = 'EXTRACT'
+    SERVICE_STAGE = 'CORE'
     SERVICE_CPU_CORES = 1
     SERVICE_RAM_MB = 256
     SERVICE_DEFAULT_CONFIG = {
@@ -614,6 +614,7 @@ class EmlParser(ServiceBase):
                             beautified_headers[header]=ugly_dict[header]
 
                     elif header.startswith("ARC-Authentication-Results"):
+                        
                         try:
                             auth_res=ugly_dict[header].split(';') 
                             beautified_headers[header]=[] 
@@ -627,7 +628,38 @@ class EmlParser(ServiceBase):
                             beautified_headers[header]=ugly_dict[header]
                     else:
                         beautified_headers[header]=ugly_dict[header]
-                else:
+                
+                elif header.startswith("email_headers"):
+                    try:
+                        beautified_headers[header]={}
+                        for s in ugly_dict[header]:
+                            index = s.index(":")
+                            key = s[:index]
+                            value = s[index+2:]
+                            if key in beautified_headers[header].keys():  
+                                if not isinstance(beautified_headers[header][key],list):
+                                    temp=beautified_headers[header][key]
+                                    beautified_headers[header][key]=[]
+                                    beautified_headers[header][key].append(temp)
+                                beautified_headers[header][key].append(value)
+                                continue
+                            beautified_headers[header][key]=value
+                        beautified_headers[header]=self.beautify_headers(beautified_headers[header])
+                    except Exception as e:
+                        self.log.exception(e)
+                        beautified_headers[header]=ugly_dict[header]
+                elif header.startswith("received") or header.startswith("Received") :
+                    try:
+                        if isinstance(ugly_dict[header],list):
+                            beautified_headers[header]=[]
+                            for s in ugly_dict[header]:
+                                beautified_headers[header].append(s)
+                        else:
+                            beautified_headers[header]=ugly_dict[header]
+                    except Exception as e:
+                        self.log.exception(e)
+                        beautified_headers[header]=ugly_dict[header]
+
                     beautified_headers[header]=ugly_dict[header]
             else: #all the non-rfc822 headers (client dependant)
                 if header.startswith("X-YMail"): #Yahoo mail headers
