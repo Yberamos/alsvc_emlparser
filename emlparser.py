@@ -3,6 +3,7 @@ from assemblyline.al.common.result import Result, ResultSection, SCORE
 import email
 from email.header import decode_header
 import re
+import pprint
 
 sections = [
     {
@@ -225,7 +226,7 @@ class EmlParser(ServiceBase):
                     redirection_type = None
                     original_forward_path = None
 
-                entry = {'forward_path': forward_path}
+                entry = forward_path
                 if redirection_type is not None and original_forward_path is not None:
                     entry['redirection_type'] = redirection_type
                     entry['original_forward_path'] = original_forward_path
@@ -579,6 +580,9 @@ class EmlParser(ServiceBase):
                         beautified_headers[header]=ugly_dict[header]
 
                 elif header.startswith("Journaling_Informations"): 
+                    
+
+
                     try:
                         beautified_headers[header]={}
                         for key in ugly_dict[header].keys():
@@ -586,9 +590,9 @@ class EmlParser(ServiceBase):
                                 bad_chars = re.compile('[%s]' % '<>')
                                 beautified_headers[header][key]=bad_chars.sub('',ugly_dict[header][key])
                             elif key.startswith("Recipient"): 
-                                beautified_headers[header][key]={}
-                                for entry in ugly_dict[header][key][0].keys():
-                                    beautified_headers[header][key][entry]=ugly_dict[header][key][0][entry].replace('\r','') #instead of having a list  with all the adresses in a dictionary with only one entry, move everything up into the dictionary
+                                beautified_headers[header][key]=[]
+                                for entry in ugly_dict[header][key]:
+                                    beautified_headers[header][key].append(entry.replace('\r',''))
                             else:
                                 beautified_headers[header][key]=ugly_dict[header][key]
                     except Exception as e:
