@@ -3,7 +3,6 @@ from assemblyline.al.common.result import Result, ResultSection, SCORE
 import email
 from email.header import decode_header
 import re
-import traceback
 
 sections = [
     {
@@ -557,7 +556,6 @@ class EmlParser(ServiceBase):
                             
                     except Exception as e:
                         self.log.exception(e)
-                        print request.path
                         beautified_headers[header]=ugly_dict[header]
                 
                 elif header.startswith("Content-Type"):
@@ -624,7 +622,6 @@ class EmlParser(ServiceBase):
                                 
                         except Exception as e:
                             self.log.exception(e)
-                            print request.path
                             beautified_headers[header]=ugly_dict[header]
                     else:
                         beautified_headers[header]=ugly_dict[header]
