@@ -415,6 +415,37 @@ class EmlParser(ServiceBase):
 
         return result
 
+    @staticmethod
+    def beatify_dict(cat_dict):
+        """
+            Process:
+                Split a string into a dictionary
+
+            Input:
+                cat_dict: a dictionary that is in a string format
+
+            Output:
+                the dictionary generated from the string
+        """
+        beautified = {}
+        bad_chars = re.compile('[%s]' % '\n\r\t ')
+        signature = bad_chars.sub('', cat_dict)  # remove all the control char while it's still a string
+        signature = signature.replace("=", ";").split(";")
+        signature = filter(None, signature)
+        for entry in signature:
+            # the elements in the list will have the order= key value key value key value
+            if signature.index(entry) % 2 == 0:
+                beautified[entry] = ""
+                key = entry
+            else:
+                if key.startswith('b'):
+                    # those entry are supposed to be in b64 but the padding was losy
+                    missing_padding = len(entry) % 4
+                    if missing_padding:
+                        entry += '=' * (4 - missing_padding)
+                beautified[key] = entry
+        return beautified
+
     def beautify_headers(self, ugly_dict):
         """
 
@@ -445,7 +476,7 @@ class EmlParser(ServiceBase):
                         beautified_headers[header] = ugly_dict[header]
 
                 elif header.startswith("Subject") or header.startswith("Thread-Topic"):
-
+                    # seperate case from "From" because there's no '< >' to remove
                     try:
                         temp = decode_header(ugly_dict[header])
                         if temp[0][1] is not None:  # check if it's encoded
@@ -475,7 +506,10 @@ class EmlParser(ServiceBase):
                         self.log.exception(e)
                         beautified_headers[header] = ugly_dict[header]
 
-                elif header.startswith("Authentication"):  # same as DKIM-signature but much simpler
+                elif header.startswith("Authentication"):
+                    # same as DKIM-signature but much simpler (or not...)
+                    # TODO: find how this header is supposed to be arranged
+
                     try:
                         auth_res = ugly_dict[header].split(';')
                         beautified_headers[header] = []
@@ -494,7 +528,7 @@ class EmlParser(ServiceBase):
                         beautified_headers[header][header] = content[0]
                         if len(content) > 1:
                             boundary = content[1].replace(' ', '')
-                # the boundary field can sometimes be boundary="----=_Part_39" the 2nd '=' being part of the boundary
+                # the boundary field can be boundary="----=_Part_39" the 2nd '=' being part of the boundary
                             beautified_headers[header]["boundary"] = boundary[9:].replace('\"', '')
 
                     except Exception as e:
@@ -510,11 +544,11 @@ class EmlParser(ServiceBase):
                         beautified_headers[header] = ugly_dict[header]
 
                 elif header.startswith("Journaling_Information"):
-
+                    #personalised entry with the journaling information
                     try:
                         beautified_headers[header] = {}
                         for key in ugly_dict[header].keys():
-                            if key.startswith("Message-I"):
+                            if key.startswith("Message-I"): # sometimes it's "Message-ID" and sometimes "Message-Id"
                                 bad_chars = re.compile('[%s]' % '<>')
                                 beautified_headers[header][key] = bad_chars.sub('', ugly_dict[header][key])
                             elif key.startswith("Recipient"):
@@ -627,34 +661,3 @@ class EmlParser(ServiceBase):
                 else:
                     beautified_headers[header] = ugly_dict[header]
         return beautified_headers
-
-    @staticmethod
-    def beatify_dict(cat_dict):
-        """
-            Process:
-                Split a string into a dictionary
-
-            Input:
-                cat_dict: a dictionary that is in a string format
-
-            Output:
-                the dictionary generated from the string
-        """
-        beautified = {}
-        bad_chars = re.compile('[%s]' % '\n\r\t ')
-        signature = bad_chars.sub('', cat_dict)  # remove all the control char while it's still a string
-        signature = signature.replace("=", ";").split(";")
-        signature = filter(None, signature)
-        for entry in signature:
-            # the elements in the list will have the order= key value key value key value
-            if signature.index(entry) % 2 == 0:
-                beautified[entry] = ""
-                key = entry
-            else:
-                if key.startswith('b'):
-                    # those entry are supposed to be in b64 but the padding was losy
-                    missing_padding: int = len(entry) % 4
-                    if missing_padding:
-                        entry += '=' * (4 - missing_padding)
-                beautified[key] = entry
-        return beautified
