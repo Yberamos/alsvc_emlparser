@@ -99,7 +99,7 @@ class EmlParser(ServiceBase):
     SERVICE_REVISION = ServiceBase.parse_revision('$Id$')
     SERVICE_VERSION = '1'
     SERVICE_ENABLED = True
-    SERVICE_STAGE = 'CORE'
+    SERVICE_STAGE = 'EXTRACT'
     SERVICE_CPU_CORES = 1
     SERVICE_RAM_MB = 256
     SERVICE_DEFAULT_CONFIG = {
@@ -111,6 +111,7 @@ class EmlParser(ServiceBase):
         super(EmlParser, self).__init__(cfg)
         self.parsing_phishme = None
         self.parsing_journaling = None
+
 
     def start(self):
         self.parsing_phishme = self.cfg.get('PARSE_PHISHME', False)
