@@ -7,6 +7,7 @@ It is an array of dict because each recipient may contain not only the recipient
 import email
 import re
 from email.header import decode_header
+import pprint
 
 from assemblyline.al.common.result import Result, ResultSection, SCORE
 from assemblyline.al.service.base import ServiceBase
@@ -151,7 +152,8 @@ class EmlParser(ServiceBase):
                 found['Eml_type'] = "Journaling"
             except MalformedRecordMessageError as e:
                 self.log.error(e)
-            except Exception:
+            except Exception as e:
+                self.log.error(e)
                 pass
 
         try:
@@ -201,7 +203,7 @@ class EmlParser(ServiceBase):
                     redirection_type = None
                     original_forward_path = None
 
-                entry = forward_path
+                entry = {'forward_path': forward_path}
                 if redirection_type is not None and original_forward_path is not None:
                     entry['redirection_type'] = redirection_type
                     entry['original_forward_path'] = original_forward_path
@@ -428,6 +430,15 @@ class EmlParser(ServiceBase):
                 the dictionary generated from the string
         """
         beautified = {}
+        print
+        print
+        print
+        print
+        pprint.pprint(cat_dict)
+        print
+        print
+        print
+        print
         bad_chars = re.compile('[%s]' % '\n\r\t ')
         signature = bad_chars.sub('', cat_dict)  # remove all the control char while it's still a string
         signature = signature.replace("=", ";").split(";")
@@ -561,8 +572,12 @@ class EmlParser(ServiceBase):
                                 beautified_headers[header][key] = bad_chars.sub('', ugly_dict[header][key])
                             elif key.startswith("Recipient"):
                                 beautified_headers[header][key] = []
-                                for entry in ugly_dict[header][key]:
-                                    beautified_headers[header][key].append(entry.replace('\r', ''))
+                                for elem in ugly_dict[header][key]:
+                                    working_dict=elem
+                                    for entry in working_dict.keys():
+                                        working_dict[entry]=working_dict[entry].replace('\r', '')
+
+                                    beautified_headers[header][key].append(working_dict)
                             else:
                                 beautified_headers[header][key] = ugly_dict[header][key]
                     except Exception as e:
@@ -601,23 +616,38 @@ class EmlParser(ServiceBase):
                         beautified_headers[header] = ugly_dict[header]
 
                 elif header.startswith("email_headers"):
+                    print "email_headers"
+                    pprint.pprint(ugly_dict[header])
                     try:
                         beautified_headers[header] = {}
-                        for s in ugly_dict[header]:
-                            index = s.index(":")
-                            key = s[:index]
-                            value = s[index + 2:]
-                            if key in beautified_headers[header].keys():
-                                if not isinstance(beautified_headers[header][key], list):
-                                    temp = beautified_headers[header][key]
-                                    beautified_headers[header][key] = []
-                                    beautified_headers[header][key].append(temp)
-                                beautified_headers[header][key].append(value)
-                                continue
-                            beautified_headers[header][key] = value
+                        key=""
+                        value=""
+                        for s in filter(None,ugly_dict[header]):
+                            if s.startswith(' '):
+                                pprint.pprint(beautified_headers[header][key])
+                                pprint.pprint(s.lstrip())
+                                if key in beautified_headers[header].keys(): 
+                                    beautified_headers[header][key][-1]=beautified_headers[header][key][-1]+" "+s.lstrip()
+                                else:
+                                    beautified_headers[header][key]=beautified_headers[header][key]+" "+s.lstrip()
+                            else:
+                                index = s.index(":")
+                                print index
+                                key = s[:index]
+                                print key
+                                print key.startswith(' ')
+                                value = s[index + 2:]
+                                if key in beautified_headers[header].keys():
+                                    if not isinstance(beautified_headers[header][key], list):
+                                        temp = beautified_headers[header][key]
+                                        beautified_headers[header][key] = []
+                                        beautified_headers[header][key].append(temp)
+                                    beautified_headers[header][key].append(value)
+                                    continue
+                                beautified_headers[header][key] = value
                         beautified_headers[header] = self.beautify_headers(beautified_headers[header])
                     except Exception as e:
-                        self.log.error(e)
+                        self.log.exception(e)
                         beautified_headers[header] = ugly_dict[header]
                 elif header.startswith("received") or header.startswith("Received"):
                     try:
@@ -662,6 +692,14 @@ class EmlParser(ServiceBase):
                 elif header.startswith("X-MS-Exchange-Parent-Message-Id"):  # Microsoft Exchange headers
                     try:
                         bad_chars = re.compile('[%s]' % '<>')
+                        beautified_headers[header] = bad_chars.sub('', ugly_dict[header])
+                    except Exception as e:
+                        self.log.error(e)
+                        beautified_headers[header] = ugly_dict[header]
+                
+                elif header.startswith("X-MS-Exchange-Forest-IndexAgent"):  # Microsoft Exchange headers
+                    try:
+                        bad_chars = re.compile('[%s]' % '\n\r\t /')
                         beautified_headers[header] = bad_chars.sub('', ugly_dict[header])
                     except Exception as e:
                         self.log.error(e)
