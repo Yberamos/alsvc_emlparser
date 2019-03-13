@@ -8,6 +8,8 @@ import email
 import re
 from email.header import decode_header
 import pprint
+import quopri
+import chardet
 
 from assemblyline.al.common.result import Result, ResultSection, SCORE
 from assemblyline.al.service.base import ServiceBase
@@ -578,8 +580,12 @@ class EmlParser(ServiceBase):
                                         working_dict[entry]=working_dict[entry].replace('\r', '')
 
                                     beautified_headers[header][key].append(working_dict)
+                            elif key.startswith("Subject") :
+                                beautified_headers[header][key] = ugly_dict[header][key].decode('iso-8859-1').encode('utf8')
+
                             else:
-                                beautified_headers[header][key] = ugly_dict[header][key]
+                                beautified_headers[header][key] = ugly_dict[header][key].decode('iso-8859-1').encode('utf8')
+                            
                     except Exception as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
