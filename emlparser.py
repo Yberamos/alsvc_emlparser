@@ -667,6 +667,7 @@ class EmlParser(ServiceBase):
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
+                else:
                     beautified_headers[header] = ugly_dict[header]
             else:  # all the non-rfc822 headers (client dependent)
                 if header.startswith("X-YMail"):  # Yahoo mail headers
