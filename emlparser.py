@@ -7,9 +7,6 @@ It is an array of dict because each recipient may contain not only the recipient
 import email
 import re
 from email.header import decode_header
-import pprint
-import quopri
-import chardet
 
 from assemblyline.al.common.result import Result, ResultSection, SCORE
 from assemblyline.al.service.base import ServiceBase
@@ -144,7 +141,10 @@ class EmlParser(ServiceBase):
                 found['PhishMe_Information']['Malformed'] = True
                 found['Eml_type'] = "PhishMe"
                 eml_parsed = True
-            except Exception:
+            except NotAPhishMeMailError:
+                pass
+            except Exception as e:
+                self.log.error(e.args)
                 pass
 
         if not eml_parsed and self.parsing_journaling:
@@ -153,15 +153,21 @@ class EmlParser(ServiceBase):
                 eml_parsed = True
                 found['Eml_type'] = "Journaling"
             except MalformedRecordMessageError as e:
-                self.log.error(e)
+                self.log.error(e.args[0])
+                found['Journaling_Information'] =e[1]
+                found['Journaling_Information']['Malformed'] = True
+                found['Eml_type'] = "Journaling"
+                eml_parsed = True
+            except NotAJournalRecordMessageError:
+                pass
             except Exception as e:
-                self.log.error(e)
+                self.log.error(e.args)
                 pass
 
         try:
             found = self.beautify_headers(found)
         except Exception as e:
-            self.log.error(e)
+            self.log.error(e.args)
         section = ResultSection(score=SCORE.NULL, title_text="Extracted information", body_format='JSON', body=found)
         result.add_section(section)
         request.result = result
@@ -175,19 +181,26 @@ class EmlParser(ServiceBase):
         parts = journal_record_message.get_payload()
 
         envelope_part = parts[0]
-
+        if isinstance(parts,basestring):
+            raise NotAJournalRecordMessageError("parts[0] is a string")
         envelope = envelope_part.get_payload(decode=True)
         parsed_envelope = {}
+
+        if envelope is None:
+            raise NotAJournalRecordMessageError("envelope is None")
 
         for line in envelope.split('\n'):
             # Skip empty lines
             if line.strip() == '':
                 continue
 
-            field, value = line.split(': ', 1)
-
+            try:
+                field, value = line.split(': ', 1)
+            except ValueError:
+                raise NotAJournalRecordMessageError("No ':' in line")
+            
             if field not in valid_fields:
-                raise NotAJournalRecordMessageError("Probable not a Journaling eml")
+                raise NotAJournalRecordMessageError("Field not valid")
 
             if field in unique_fields:
                 if field in parsed_envelope.keys():
@@ -254,6 +267,8 @@ class EmlParser(ServiceBase):
 
         phishing_report_parts = parts[0]
 
+        if isinstance(phishing_report_parts,basestring):
+            raise NotAPhishMeMailError("phishing_report_parts is a string")
         if phishing_report_parts.is_multipart():
             phishing_report_text_message = phishing_report_parts.get_payload()[0]
             phishing_report_text = phishing_report_text_message.get_payload(decode=True)
@@ -286,8 +301,7 @@ class EmlParser(ServiceBase):
 
             # There should be exactly one section matching
             if len(section_list) != 1:
-                raise NotAPhishMeMailError(
-                    "Section list error, probably not a PhishMe. Section list: " + str(section_list))
+                raise NotAPhishMeMailError("No section found")
             section = section_list[0]
 
             section_name = section['section_name']
@@ -432,15 +446,6 @@ class EmlParser(ServiceBase):
                 the dictionary generated from the string
         """
         beautified = {}
-        print
-        print
-        print
-        print
-        pprint.pprint(cat_dict)
-        print
-        print
-        print
-        print
         bad_chars = re.compile('[%s]' % '\n\r\t ')
         signature = bad_chars.sub('', cat_dict)  # remove all the control char while it's still a string
         signature = signature.replace("=", ";").split(";")
@@ -622,26 +627,19 @@ class EmlParser(ServiceBase):
                         beautified_headers[header] = ugly_dict[header]
 
                 elif header.startswith("email_headers"):
-                    print "email_headers"
-                    pprint.pprint(ugly_dict[header])
                     try:
                         beautified_headers[header] = {}
                         key=""
                         value=""
                         for s in filter(None,ugly_dict[header]):
                             if s.startswith(' '):
-                                pprint.pprint(beautified_headers[header][key])
-                                pprint.pprint(s.lstrip())
                                 if key in beautified_headers[header].keys(): 
                                     beautified_headers[header][key][-1]=beautified_headers[header][key][-1]+" "+s.lstrip()
                                 else:
                                     beautified_headers[header][key]=beautified_headers[header][key]+" "+s.lstrip()
                             else:
                                 index = s.index(":")
-                                print index
                                 key = s[:index]
-                                print key
-                                print key.startswith(' ')
                                 value = s[index + 2:]
                                 if key in beautified_headers[header].keys():
                                     if not isinstance(beautified_headers[header][key], list):
@@ -653,7 +651,7 @@ class EmlParser(ServiceBase):
                                 beautified_headers[header][key] = value
                         beautified_headers[header] = self.beautify_headers(beautified_headers[header])
                     except Exception as e:
-                        self.log.exception(e)
+                        self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
                 elif header.startswith("received") or header.startswith("Received"):
                     try:
