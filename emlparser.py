@@ -212,7 +212,7 @@ class EmlParser(ServiceBase):
                     forward_path, redirection = value.split(', ', 1)
                     redirection_type, original_forward_path = redirection.split(": ", 1)
                     if redirection_type not in redirection_types:
-                        raise MalformedRecordMessageError("Unknown redirection type: " + str(redirection_type))
+                        raise MalformedRecordMessageError("Unknown redirection type: " + str(redirection_type),parsed_envelope)
                 else:
                     forward_path = value
                     redirection_type = None
@@ -230,7 +230,7 @@ class EmlParser(ServiceBase):
 
         for f in mandatory_unique_fields:
             if f not in parsed_envelope.keys():
-                raise MalformedRecordMessageError("Missing mandatory field: " + str(f))
+                raise MalformedRecordMessageError("Missing mandatory field: " + str(f),parsed_envelope)
 
         return parsed_envelope
 
