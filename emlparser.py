@@ -1,9 +1,4 @@
-"""
-- Note that the value associated with recipients fields (e.g. to, cc, ...) is an array of dict.
-It is an array because the journaling data may contain multiple occurrence of the same recipient field (e.g. multiple to: lines).
-It is an array of dict because each recipient may contain not only the recipient address but also a redirection type and a redirection address.
-"""
-
+import cchardet
 import email
 import re
 from email.header import decode_header
@@ -61,7 +56,8 @@ sections = [
 ]
 
 mandatory_unique_fields = ["Sender", "Subject", "Message-Id"]
-unique_fields = mandatory_unique_fields + ["On-Behalf-Of", "Label", "Mailbox", "SentUtc", "ReceivedUtc"]
+unique_fields = mandatory_unique_fields + \
+    ["On-Behalf-Of", "Label", "Mailbox", "SentUtc", "ReceivedUtc"]
 recipient_fields = ["Bcc", "To", "Cc", "Recipient"]
 valid_fields = unique_fields + recipient_fields
 
@@ -154,7 +150,7 @@ class EmlParser(ServiceBase):
                 found['Eml_type'] = "Journaling"
             except MalformedRecordMessageError as e:
                 self.log.error(e.args[0])
-                found['Journaling_Information'] =e[1]
+                found['Journaling_Information'] = e[1]
                 found['Journaling_Information']['Malformed'] = True
                 found['Eml_type'] = "Journaling"
                 eml_parsed = True
@@ -166,11 +162,38 @@ class EmlParser(ServiceBase):
 
         try:
             found = self.beautify_headers(found)
+            self.check_cset(found)
         except Exception as e:
             self.log.error(e.args)
-        section = ResultSection(score=SCORE.NULL, title_text="Extracted information", body_format='JSON', body=found)
+
+        section = ResultSection(score=SCORE.NULL, title_text="Extracted information",
+                                body_format='JSON', body=found)
         result.add_section(section)
         request.result = result
+
+    def check_list(self, data):
+        for entry in data:
+            if isinstance(entry, dict):
+                self.check_cset(entry)
+            elif isinstance(entry, list):
+                self.check_list(entry)
+            else:
+                if entry is not None:
+                    cset = cchardet.detect(entry)['encoding']
+                    if not cset == "ASCII" and cset is not None:
+                        data[data.index(entry)] = entry.decode(cset, 'strict').encode('utf8')
+
+    def check_cset(self, data):
+        for entry in data.keys():
+            if isinstance(data[entry], dict):
+                self.check_cset(data[entry])
+            elif isinstance(data[entry], list):
+                self.check_list(data[entry])
+            else:
+                if data[entry] is not None:
+                    cset = cchardet.detect(data[entry])['encoding']
+                    if not cset == "ASCII" and cset is not None:
+                        data[entry] = data[entry].decode(cset, 'strict').encode('utf8')
 
     @staticmethod
     def parse_journaling(journal_record_message):
@@ -198,7 +221,7 @@ class EmlParser(ServiceBase):
                 field, value = line.split(': ', 1)
             except ValueError:
                 raise NotAJournalRecordMessageError("No ':' in line")
-            
+
             if field not in valid_fields:
                 raise NotAJournalRecordMessageError("Field not valid")
 
@@ -212,7 +235,7 @@ class EmlParser(ServiceBase):
                     forward_path, redirection = value.split(', ', 1)
                     redirection_type, original_forward_path = redirection.split(": ", 1)
                     if redirection_type not in redirection_types:
-                        raise MalformedRecordMessageError("Unknown redirection type: " + str(redirection_type),parsed_envelope)
+                        raise MalformedRecordMessageError("Unknown redirection type: " + str(redirection_type), parsed_envelope)
                 else:
                     forward_path = value
                     redirection_type = None
@@ -230,7 +253,7 @@ class EmlParser(ServiceBase):
 
         for f in mandatory_unique_fields:
             if f not in parsed_envelope.keys():
-                raise MalformedRecordMessageError("Missing mandatory field: " + str(f),parsed_envelope)
+                raise MalformedRecordMessageError("Missing mandatory field: " + str(f), parsed_envelope)
 
         return parsed_envelope
 
@@ -480,18 +503,18 @@ class EmlParser(ServiceBase):
         for header in ugly_dict.keys():
             if not header.startswith("X"):
                 # RFC822 headers or personalized entry in the dict
-                if header.startswith("To") or header.startswith("From") :
+                if header.startswith("To") or header.startswith("From"):
                     try:
                         bad_chars = re.compile('[%s]' % '"')
                         raw = bad_chars.sub('', ugly_dict[header])
                         raw = filter(None, raw)
-                        beautified_headers[header]=[]
+                        beautified_headers[header] = []
                         for s in raw.split(">,"):
                             address=[]
                             for sub_s in s.split("<"):
                                 bad_chars = re.compile('[%s]' % "'>")
                                 sub_s = bad_chars.sub('', sub_s)
-                                sub_s = re.sub("^[ ]",'',sub_s)
+                                sub_s = re.sub("^[ ]", '', sub_s)
                                 temp = decode_header(sub_s)
                                 if temp[0][1] is not None:
                                     sub_s = temp[0][0].decode(temp[0][1], 'strict')
@@ -590,7 +613,7 @@ class EmlParser(ServiceBase):
 
                             else:
                                 beautified_headers[header][key] = ugly_dict[header][key].decode('iso-8859-1').encode('utf8')
-                            
+
                     except Exception as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
@@ -629,14 +652,14 @@ class EmlParser(ServiceBase):
                 elif header.startswith("email_headers"):
                     try:
                         beautified_headers[header] = {}
-                        key=""
-                        value=""
-                        for s in filter(None,ugly_dict[header]):
+                        key = ""
+                        value = ""
+                        for s in filter(None, ugly_dict[header]):
                             if s.startswith(' '):
                                 if key in beautified_headers[header].keys(): 
-                                    beautified_headers[header][key][-1]=beautified_headers[header][key][-1]+" "+s.lstrip()
+                                    beautified_headers[header][key][-1] = beautified_headers[header][key][-1]+" "+s.lstrip()
                                 else:
-                                    beautified_headers[header][key]=beautified_headers[header][key]+" "+s.lstrip()
+                                    beautified_headers[header][key] = beautified_headers[header][key]+" "+s.lstrip()
                             else:
                                 index = s.index(":")
                                 key = s[:index]
@@ -701,7 +724,7 @@ class EmlParser(ServiceBase):
                     except Exception as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
-                
+
                 elif header.startswith("X-MS-Exchange-Forest-IndexAgent"):  # Microsoft Exchange headers
                     try:
                         bad_chars = re.compile('[%s]' % '\n\r\t /')
