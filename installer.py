@@ -2,9 +2,7 @@
 
 
 def install(alsi):
-    alsi.pip_install_all([
-        'cchardet'
-    ])
+    alsi.pip_install('cchardet')
 
 
 if __name__ == '__main__':
