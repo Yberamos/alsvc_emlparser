@@ -1,4 +1,4 @@
-import cchardet
+import chardet
 import email
 import re
 from email.header import decode_header
@@ -139,7 +139,7 @@ class EmlParser(ServiceBase):
                 eml_parsed = True
             except NotAPhishMeMailError:
                 pass
-            except Exception as e:
+            except (ValueError,TypeError) as e:
                 self.log.error(e.args)
                 pass
 
@@ -156,14 +156,14 @@ class EmlParser(ServiceBase):
                 eml_parsed = True
             except NotAJournalRecordMessageError:
                 pass
-            except Exception as e:
+            except (ValueError,TypeError) as e:
                 self.log.error(e.args)
                 pass
 
         try:
             found = self.beautify_headers(found)
             self.check_cset(found)
-        except Exception as e:
+        except (ValueError,TypeError) as e:
             self.log.error(e.args)
 
         section = ResultSection(score=SCORE.NULL, title_text="Extracted information",
@@ -179,9 +179,13 @@ class EmlParser(ServiceBase):
                 self.check_list(entry)
             else:
                 if entry is not None:
-                    cset = cchardet.detect(entry)['encoding']
-                    if not cset == "ASCII" and cset is not None:
-                        data[data.index(entry)] = entry.decode(cset, 'strict').encode('utf8')
+                    if isinstance(entry,unicode):
+                        self.log.error(entry)
+                        data[data.index(entry)] = entry.encode('utf8')
+                    else:
+                        cset = chardet.detect(entry)['encoding']
+                        if not cset == "ASCII" and cset is not None:
+                            data[data.index(entry)] = entry.decode(cset, 'strict').encode('ASCII')
 
     def check_cset(self, data):
         for entry in data.keys():
@@ -191,9 +195,12 @@ class EmlParser(ServiceBase):
                 self.check_list(data[entry])
             else:
                 if data[entry] is not None:
-                    cset = cchardet.detect(data[entry])['encoding']
-                    if not cset == "ASCII" and cset is not None:
-                        data[entry] = data[entry].decode(cset, 'strict').encode('utf8')
+                    if isinstance(data[entry],unicode):
+                        data[entry]=data[entry].encode('utf8')
+                    else:
+                        cset = chardet.detect(data[entry])['encoding']
+                        if not cset == "ASCII" and cset is not None:
+                            data[entry] = data[entry].decode(cset, 'strict').encode('utf8')
 
     @staticmethod
     def parse_journaling(journal_record_message):
@@ -520,7 +527,7 @@ class EmlParser(ServiceBase):
                                     sub_s = temp[0][0].decode(temp[0][1], 'strict')
                                 address.append(sub_s)
                             beautified_headers[header].append(address)
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -533,7 +540,7 @@ class EmlParser(ServiceBase):
                         else:
                             decoded = temp[0][0]
                         beautified_headers[header] = decoded
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -544,14 +551,14 @@ class EmlParser(ServiceBase):
                     try:
                         bad_chars = re.compile('[%s]' % '<>')
                         beautified_headers[header] = bad_chars.sub('', ugly_dict[header])
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
                 elif header.startswith("DKIM-Signature"):  # the DKIM-signature is a dict concatenate as a string
                     try:
                         beautified_headers[header] = self.beatify_dict(ugly_dict[header])
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -566,7 +573,7 @@ class EmlParser(ServiceBase):
                             start = re.search(r'[a-z]', entry).start()
                             beautified_headers[header].append(entry[start:])
 
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -580,7 +587,7 @@ class EmlParser(ServiceBase):
                 # the boundary field can be boundary="----=_Part_39" the 2nd '=' being part of the boundary
                             beautified_headers[header]["boundary"] = boundary[9:].replace('\"', '')
 
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -588,7 +595,7 @@ class EmlParser(ServiceBase):
                     try:
                         bad_chars = re.compile('[%s]' % '<>')
                         beautified_headers[header] = bad_chars.sub('', ugly_dict[header])
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -614,14 +621,14 @@ class EmlParser(ServiceBase):
                             else:
                                 beautified_headers[header][key] = ugly_dict[header][key].decode('iso-8859-1').encode('utf8')
 
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
                 elif header.startswith("PhishMe_Information"):
                     try:
                         beautified_headers[header] = self.beautify_headers(ugly_dict[header])
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -630,7 +637,7 @@ class EmlParser(ServiceBase):
                             or header.startswith("ARC-Seal"):
                         try:
                             beautified_headers[header] = self.beatify_dict(ugly_dict[header])
-                        except Exception as e:
+                        except (ValueError,TypeError) as e:
                             self.log.error(e)
                             beautified_headers[header] = ugly_dict[header]
 
@@ -643,7 +650,7 @@ class EmlParser(ServiceBase):
                                 start = re.search(r'[a-z]', entry).start()
                                 beautified_headers[header].append(entry[start:])
 
-                        except Exception as e:
+                        except (ValueError,TypeError) as e:
                             self.log.error(e)
                             beautified_headers[header] = ugly_dict[header]
                     else:
@@ -673,7 +680,7 @@ class EmlParser(ServiceBase):
                                     continue
                                 beautified_headers[header][key] = value
                         beautified_headers[header] = self.beautify_headers(beautified_headers[header])
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
                 elif header.startswith("received") or header.startswith("Received"):
@@ -684,7 +691,7 @@ class EmlParser(ServiceBase):
                                 beautified_headers[header].append(s)
                         else:
                             beautified_headers[header] = ugly_dict[header]
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -695,7 +702,7 @@ class EmlParser(ServiceBase):
                     try:
                         bad_chars = re.compile('[%s]' % '\n\r\t ')
                         beautified_headers[header] = bad_chars.sub('', ugly_dict[header])
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -705,7 +712,7 @@ class EmlParser(ServiceBase):
                             beautified_headers[header] = self.beatify_dict(ugly_dict[header])
                         else:
                             beautified_headers[header] = ugly_dict[header]
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -713,7 +720,7 @@ class EmlParser(ServiceBase):
                     try:
                         apparently = ugly_dict[header].split(';')
                         beautified_headers[header] = (apparently[0], apparently[1][1:])
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -721,7 +728,7 @@ class EmlParser(ServiceBase):
                     try:
                         bad_chars = re.compile('[%s]' % '<>')
                         beautified_headers[header] = bad_chars.sub('', ugly_dict[header])
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
 
@@ -729,7 +736,7 @@ class EmlParser(ServiceBase):
                     try:
                         bad_chars = re.compile('[%s]' % '\n\r\t /')
                         beautified_headers[header] = bad_chars.sub('', ugly_dict[header])
-                    except Exception as e:
+                    except (ValueError,TypeError) as e:
                         self.log.error(e)
                         beautified_headers[header] = ugly_dict[header]
                 else:
