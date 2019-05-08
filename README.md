@@ -9,8 +9,7 @@ and extract the information for them from the body. Then it will try to beautify
 
 This service will first extract headers from a given eml using the email module, then it will attempt
 to parse the file to check if it was created by one of the software selected in the options. 
-To do so, the parsing method is called in a try statement with an except EXCEPTION. The try can have
-4 outcomes:
+To do so, the parsing method is called in a try statement wit. The try can have 4 outcomes:
 
 * it was an eml from the software and there was no problem -> the service continue
 
@@ -33,7 +32,7 @@ PARSE_JOURNALING:	Activate the treatment of Journaling eml
 
 ### Beautify:
 
-The beautify_headers method will attemp to clean the headers extracted from the mail to remove any unwanted
+The beautify_headers method will attempt to clean the headers extracted from the mail to remove any unwanted
 characters, encode everything in utf-8 and flobally make the data more usable.
 It can clean:
 
@@ -75,10 +74,4 @@ It can clean:
 
 * X-MS-Exchange-Forest-IndexAgent
 
-##### Warning:
-
-As, at the step beautify_headers is used, all the usefull data have already been extracted, each case is encased 
-in a try statement and a except EXCEPTION so as to still get a result even if the beautify for a particular headers 
-fails. This means that if there's an error, that header will not be beautified but the service will still return 
-the information he managed to extract at the previous step. But AssemblyLine will not show any error (the error 
-message will still be in the logs).
+Every beautify is incased in a try statement to still return the result (not beautified) if it's not in the expected format.
