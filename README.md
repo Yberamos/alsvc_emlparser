@@ -1,6 +1,5 @@
 # EmlParser Service
 
-*NB: UNDER REVIEW*
 
 This service will parse an eml to get the relevant information.
 
